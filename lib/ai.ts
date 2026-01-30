@@ -2,6 +2,8 @@
  * Интеграция с AI (OpenRouter: openai/gpt-4o-mini) для формирования поискового запроса и ранжирования
  */
 
+import type { SearchResult } from './search';
+
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = 'openai/gpt-4o-mini';
 
@@ -51,22 +53,14 @@ export async function buildSearchQueryFromText(text: string): Promise<string> {
   return query.slice(0, 200);
 }
 
-export interface RankableResult {
-  title: string;
-  url: string;
-  snippet: string;
-  domain: string;
-  sourceType: string;
-}
-
 /**
  * Ранжирование результатов поиска по релевантности к исходному тексту через AI
  */
 export async function rankSearchResultsWithAI(
   originalText: string,
-  results: RankableResult[],
+  results: SearchResult[],
   maxResults: number = 3
-): Promise<RankableResult[]> {
+): Promise<SearchResult[]> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey || results.length === 0) {
     return results.slice(0, maxResults);
@@ -113,7 +107,7 @@ export async function rankSearchResultsWithAI(
     .map((s) => parseInt(s.trim(), 10) - 1)
     .filter((n) => n >= 0 && n < results.length);
   const seen = new Set<number>();
-  const ordered: RankableResult[] = [];
+  const ordered: SearchResult[] = [];
   for (const i of indices) {
     if (!seen.has(i)) {
       seen.add(i);

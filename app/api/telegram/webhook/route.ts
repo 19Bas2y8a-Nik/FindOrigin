@@ -85,9 +85,13 @@ async function handleTextMessage(chatId: number, text: string): Promise<void> {
     
     topResults.forEach((result, index) => {
       const emoji = index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉';
-      const typeEmoji = (
-        { official: '🏛️', news: '📰', blog: '✍️', research: '🔬', other: '🌐' } as Record<string, string>
-      )[result.sourceType] ?? '🌐';
+      const typeEmoji = {
+        official: '🏛️',
+        news: '📰',
+        blog: '✍️',
+        research: '🔬',
+        other: '🌐',
+      }[result.sourceType];
       
       responseText += `${emoji} ${typeEmoji} ${result.title}\n`;
       responseText += `🔗 ${result.url}\n`;
