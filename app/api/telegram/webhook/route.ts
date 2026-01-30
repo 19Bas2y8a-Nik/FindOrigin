@@ -7,7 +7,7 @@ import { TelegramUpdate } from '@/types/telegram';
 import { sendMessage } from '@/lib/telegram';
 import { getMessageFromTelegramLink, cleanText } from '@/lib/telegram-parser';
 import { buildSearchQueryFromText, rankSearchResultsWithAI } from '@/lib/ai';
-import { searchSources, filterAndRankResults } from '@/lib/search';
+import { searchSources, filterAndRankResults, type SearchResult } from '@/lib/search';
 
 /**
  * Обработка команды /start
@@ -65,9 +65,9 @@ async function handleTextMessage(chatId: number, text: string): Promise<void> {
     const searchResults = await searchSources(searchQuery, 10);
     
     // Ранжирование: AI при наличии ключа, иначе по типу источника
-    let topResults = searchResults;
+    let topResults: SearchResult[];
     if (process.env.OPENROUTER_API_KEY && searchResults.length > 0) {
-      topResults = await rankSearchResultsWithAI(cleanedText, searchResults, 3);
+      topResults = (await rankSearchResultsWithAI(cleanedText, searchResults, 3)) as SearchResult[];
     } else {
       topResults = filterAndRankResults(searchResults, 3);
     }
