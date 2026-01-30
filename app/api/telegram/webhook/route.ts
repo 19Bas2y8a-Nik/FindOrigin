@@ -5,9 +5,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TelegramUpdate } from '@/types/telegram';
 import { sendMessage } from '@/lib/telegram';
-import { parseTelegramLink, getMessageFromTelegramLink, cleanText } from '@/lib/telegram-parser';
-import { extractInfo } from '@/lib/text-analysis';
-import { buildSearchQuery, searchSources, filterAndRankResults } from '@/lib/search';
+import { getMessageFromTelegramLink, cleanText } from '@/lib/telegram-parser';
+import { buildSearchQueryFromText, rankSearchResultsWithAI } from '@/lib/ai';
+import { searchSources, filterAndRankResults } from '@/lib/search';
 
 /**
  * Обработка команды /start
@@ -38,10 +38,9 @@ async function handleHelp(chatId: number): Promise<void> {
 2️⃣ Или отправь ссылку на Telegram-пост (формат: https://t.me/channel/123)
 
 Бот:
-• Извлечет ключевые утверждения
-• Найдет даты, числа, имена
-• Поищет источники в интернете
-• Вернет 1-3 наиболее релевантных источника
+• Сформирует поисковый запрос с помощью AI
+• Поищет источники (Google Search API)
+• Отранжирует и вернет 1–3 наиболее релевантных источника
 
 Примеры:
 • "В 2024 году население России составило 146 миллионов человек"
@@ -54,24 +53,24 @@ async function handleHelp(chatId: number): Promise<void> {
  * Обработка текстового сообщения
  */
 async function handleTextMessage(chatId: number, text: string): Promise<void> {
-  // Отправляем уведомление о начале обработки
-  await sendMessage(chatId, '🔍 Анализирую текст и ищу источники...');
+  await sendMessage(chatId, '🔍 Формирую поисковый запрос и ищу источники...');
   
   try {
-    // Очищаем текст
     const cleanedText = cleanText(text);
     
-    // Извлекаем информацию
-    const extractedInfo = extractInfo(cleanedText);
+    // Поисковый запрос формирует AI (openai/gpt-4o-mini через OpenRouter)
+    const searchQuery = await buildSearchQueryFromText(cleanedText);
     
-    // Строим поисковый запрос
-    const searchQuery = buildSearchQuery(extractedInfo);
-    
-    // Ищем источники
+    // Поиск через Google Search API (или другой SEARCH_ENGINE)
     const searchResults = await searchSources(searchQuery, 10);
     
-    // Фильтруем и ранжируем
-    const topResults = filterAndRankResults(searchResults, 3);
+    // Ранжирование: AI при наличии ключа, иначе по типу источника
+    let topResults = searchResults;
+    if (process.env.OPENROUTER_API_KEY && searchResults.length > 0) {
+      topResults = await rankSearchResultsWithAI(cleanedText, searchResults, 3);
+    } else {
+      topResults = filterAndRankResults(searchResults, 3);
+    }
     
     // Формируем ответ
     if (topResults.length === 0) {
@@ -86,13 +85,9 @@ async function handleTextMessage(chatId: number, text: string): Promise<void> {
     
     topResults.forEach((result, index) => {
       const emoji = index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉';
-      const typeEmoji = {
-        official: '🏛️',
-        news: '📰',
-        blog: '✍️',
-        research: '🔬',
-        other: '🌐',
-      }[result.sourceType];
+      const typeEmoji = (
+        { official: '🏛️', news: '📰', blog: '✍️', research: '🔬', other: '🌐' } as Record<string, string>
+      )[result.sourceType] ?? '🌐';
       
       responseText += `${emoji} ${typeEmoji} ${result.title}\n`;
       responseText += `🔗 ${result.url}\n`;
